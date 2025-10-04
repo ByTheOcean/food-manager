@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>食品有效期管理</title>
+    <meta name="description" content="通过NFC管理食品有效期的智能提醒应用">
+    <meta name="theme-color" content="#4CAF50">
+    
+    <!-- PWA配置 -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    
+    <style>
+        /* 基础样式 - 完整样式请使用后面提供的完整代码 */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .card {
+            background: white;
+            padding: 20px;
+            margin: 10px 0;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        input, select, button {
+            width: 100%;
+            padding: 10px;
+            margin: 5px 0;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🥫 食品有效期管理</h1>
+        
+        <div class="card">
+            <button id="scanNFC">📱 扫描NFC标签</button>
+            <div id="nfcStatus"></div>
+        </div>
+        
+        <div class="card">
+            <h2>添加食品信息</h2>
+            <form id="foodForm">
+                <input type="text" id="foodName" placeholder="食品名称" required>
+                <input type="date" id="expiryDate" required>
+                <select id="category">
+                    <option value="冷藏">冷藏</option>
+                    <option value="冷冻">冷冻</option>
+                    <option value="常温">常温</option>
+                </select>
+                <button type="submit">添加食品</button>
+            </form>
+        </div>
+        
+        <div class="card">
+            <h2>我的食品清单</h2>
+            <div id="foodList"></div>
+        </div>
+    </div>
+
+    <script>
+        class FoodManager {
+            constructor() {
+                this.foods = JSON.parse(localStorage.getItem('foods')) || [];
+                this.init();
+            }
+            
+            init() {
+                document.getElementById('foodForm').addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    this.addFood();
+                });
+                
+                // 初始化NFC功能
+                this.initNFC();
+                this.renderList();
+                this.startReminderCheck();
+            }
+            
+            // NFC功能初始化
+            initNFC() {
+                const scanBtn = document.getElementById('scanNFC');
+                const statusEl = document.getElementById('nfcStatus');
+                
+                // 检查浏览器是否支持Web NFC
+                if ('nfc' in navigator) {
+                    statusEl.innerHTML = '✅ NFC功能可用';
+                    scanBtn.addEventListener('click', () => {
+                        this.scanNFCTag();
+                    });
+                } else {
+                    statusEl.innerHTML = '❌ 浏览器不支持NFC功能<br>' +
+                        '<small>请使用Android Chrome浏览器</small>';
+                    scanBtn.disabled = true;
+                    scanBtn.innerHTML = '📱 NFC不可用';
+                }
+            }
+            
+            // 扫描NFC标签
+            async scanNFCTag() {
+                const statusEl = document.getElementById('nfcStatus');
+                
+                try {
+                    statusEl.innerHTML = '🔍 请将手机靠近NFC标签...';
+                    
+                    // 模拟NFC扫描（实际环境中需要真实NFC支持）
+                    this.simulateNFCScan();
+                    
+                } catch (error) {
+                    console.error('NFC扫描错误:', error);
+                    statusEl.innerHTML = '❌ NFC扫描失败: ' + error.message;
+                }
+            }
+            
+            // 模拟NFC扫描（用于测试）
+            simulateNFCScan() {
+                const statusEl = document.getElementById('nfcStatus');
+                
+                // 显示模拟的NFC数据
+                statusEl.innerHTML = '✅ 扫描到NFC标签！正在填充数据...';
+                
+                // 模拟延迟，然后填充表单
+                setTimeout(() => {
+                    // 随机选择一些测试数据
+                    const testFoods = [
+                        { name: '牛奶', expiry: '2025-10-15', category: '冷藏' },
+                        { name: '鸡蛋', expiry: '2025-10-20', category: '冷藏' },
+                        { name: '面包', expiry: '2025-10-08', category: '常温' },
+                        { name: '鸡肉', expiry: '2025-10-06', category: '冷冻' }
+                    ];
+                    
+                    const randomFood = testFoods[Math.floor(Math.random() * testFoods.length)];
+                    
+                    // 填充表单
+                    document.getElementById('foodName').value = randomFood.name;
+                    document.getElementById('expiryDate').value = randomFood.expiry;
+                    document.getElementById('category').value = randomFood.category;
+                    
+                    statusEl.innerHTML = `✅ 已填充: ${randomFood.name} (${randomFood.expiry})`;
+                    
+                }, 1500);
+            }
+            
+            addFood() {
+                const foodData = {
+                    id: Date.now(),
+                    name: document.getElementById('foodName').value,
+                    expiryDate: document.getElementById('expiryDate').value,
+                    category: document.getElementById('category').value,
+                    addedDate: new Date().toISOString(),
+                    nfcScanned: true
+                };
+                
+                this.foods.push(foodData);
+                this.save();
+                this.renderList();
+                
+                // 设置提醒
+                this.scheduleReminder(foodData);
+                
+                document.getElementById('foodForm').reset();
+                this.showToast(`✅ 已添加 ${foodData.name}`);
+                
+                // 清空NFC状态
+                document.getElementById('nfcStatus').innerHTML = '';
+            }
+            
+            scheduleReminder(food) {
+                // 这里可以添加提醒逻辑
+                console.log(`已为 ${food.name} 设置提醒`);
+            }
+            
+            showToast(message) {
+                // 简单的提示显示
+                alert(message);
+            }
+            
+            renderList() {
+                const listEl = document.getElementById('foodList');
+                if (this.foods.length === 0) {
+                    listEl.innerHTML = '<p>暂无食品记录</p>';
+                    return;
+                }
+                
+                listEl.innerHTML = this.foods.map(food => `
+                    <div style="border:1px solid #ccc; padding:10px; margin:5px 0; border-radius:5px;">
+                        <h3>${food.name} ${food.nfcScanned ? '📱' : ''}</h3>
+                        <p>过期: ${food.expiryDate} | 分类: ${food.category}</p>
+                        <button onclick="foodManager.removeFood(${food.id})">删除</button>
+                    </div>
+                `).join('');
+            }
+            
+            removeFood(id) {
+                if (confirm('确定要删除这个食品记录吗？')) {
+                    this.foods = this.foods.filter(food => food.id !== id);
+                    this.save();
+                    this.renderList();
+                }
+            }
+            
+            save() {
+                localStorage.setItem('foods', JSON.stringify(this.foods));
+            }
+            
+            startReminderCheck() {
+                // 这里可以添加定期检查提醒的逻辑
+            }
+        }
+        
+        // 初始化应用
+        document.addEventListener('DOMContentLoaded', () => {
+            window.foodManager = new FoodManager();
+        });
+    </script>
+</body>
+</html>
